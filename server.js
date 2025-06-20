@@ -56,7 +56,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // When a player sends their name (this is why we kept it from the last update)
+    // When a player sends their name
     socket.on('setName', (newName) => {
         if (players[socket.id] && typeof newName === 'string' && newName.trim().length > 0) {
             const cleanName = newName.trim().substring(0, 15); // Max 15 chars
