@@ -7,59 +7,77 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
     cors: {
-        origin: "*", // Set to your frontend origin in production
+        // IMPORTANT: In production, change '*' to your actual GitHub Pages URL
+        // Example: origin: "https://broofnotascammer.github.io"
+        origin: "*", 
         methods: ["GET", "POST"]
     }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
-// Leaderboard state: { socketId: { name?: string, score: number } }
-let leaderboard = {};
+// Server's Game State (in-memory, not persistent for this project)
+// Key: socket.id (unique ID for each connection)
+// Value: { id: string, name: string, score: number }
+let players = {}; 
 
-function getSortedLeaderboard() {
-    // Return an array of { id, score } sorted by score descending
-    return Object.entries(leaderboard)
-        .map(([id, data]) => ({ id, score: data.score }))
-        .sort((a, b) => b.score - a.score);
+/**
+ * Generates a sorted array of players for the leaderboard.
+ * @returns {Array<Object>} Sorted list of players by score (highest first).
+ */
+function getLeaderboard() {
+    const leaderboard = Object.values(players);
+    leaderboard.sort((a, b) => b.score - a.score);
+    return leaderboard;
 }
 
 io.on('connection', (socket) => {
-    console.log(`User connected: ${socket.id}`);
-    // Initialize user score
-    leaderboard[socket.id] = { score: 0 };
+    console.log('A user connected:', socket.id);
 
-    // Send current leaderboard to this user
-    socket.emit('leaderboardUpdate', getSortedLeaderboard());
+    // Initialize player if new
+    if (!players[socket.id]) {
+        players[socket.id] = {
+            id: socket.id,
+            name: `Player_${socket.id.substring(0, 4)}`, // Default temporary name
+            score: 0
+        };
+    }
+    
+    // Send current leaderboard to the newly connected client
+    socket.emit('leaderboardUpdate', getLeaderboard());
 
-    // Broadcast new user to all clients
-    io.emit('leaderboardUpdate', getSortedLeaderboard());
-
-    // Handle click event
+    // When a client clicks the game area
     socket.on('clickPoint', () => {
-        if (leaderboard[socket.id]) {
-            leaderboard[socket.id].score += 1;
-            // Send updated leaderboard to all clients
-            io.emit('leaderboardUpdate', getSortedLeaderboard());
+        if (players[socket.id]) {
+            players[socket.id].score += 1; // Increment score
+            console.log(`${players[socket.id].name} scored! Total score: ${players[socket.id].score}`);
+            // Broadcast the updated leaderboard to all connected clients
+            io.emit('leaderboardUpdate', getLeaderboard());
         }
     });
 
-    // Optionally handle resetting scores (if you want this feature)
-    socket.on('resetScore', () => {
-        if (leaderboard[socket.id]) {
-            leaderboard[socket.id].score = 0;
-            io.emit('leaderboardUpdate', getSortedLeaderboard());
+    // When a player sends their name
+    socket.on('setName', (newName) => {
+        if (players[socket.id] && typeof newName === 'string' && newName.trim().length > 0) {
+            const cleanName = newName.trim().substring(0, 15); // Max 15 chars
+            if (players[socket.id].name !== cleanName) { // Only update if name actually changed
+                players[socket.id].name = cleanName;
+                console.log(`Player ${socket.id} set name to: ${cleanName}`);
+                io.emit('leaderboardUpdate', getLeaderboard()); // Broadcast updated leaderboard
+            }
         }
     });
 
-    // Handle disconnect
+    // When a client disconnects
     socket.on('disconnect', () => {
-        console.log(`User disconnected: ${socket.id}`);
-        delete leaderboard[socket.id];
-        io.emit('leaderboardUpdate', getSortedLeaderboard());
+        console.log('User disconnected:', socket.id);
+        // Remove player from the list when they disconnect for this non-persistent version
+        delete players[socket.id];
+        // Broadcast the updated leaderboard to remaining clients
+        io.emit('leaderboardUpdate', getLeaderboard());
     });
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Leaderboard server running on http://0.0.0.0:${PORT}`);
+    console.log(`Server listening on http://0.0.0.0:${PORT}`);
 });
