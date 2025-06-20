@@ -16,7 +16,7 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 10000;
 
-// Server's Game State (in-memory, not persistent for this project)
+// Server's Game State (in-memory, not persistent)
 // Key: socket.id (unique ID for each connection)
 // Value: { id: string, name: string, score: number }
 let players = {}; 
@@ -56,7 +56,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // When a player sends their name
+    // When a player sends their name (this is why we kept it from the last update)
     socket.on('setName', (newName) => {
         if (players[socket.id] && typeof newName === 'string' && newName.trim().length > 0) {
             const cleanName = newName.trim().substring(0, 15); // Max 15 chars
@@ -71,7 +71,7 @@ io.on('connection', (socket) => {
     // When a client disconnects
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
-        // Remove player from the list when they disconnect for this non-persistent version
+        // Remove player from the list when they disconnect
         delete players[socket.id];
         // Broadcast the updated leaderboard to remaining clients
         io.emit('leaderboardUpdate', getLeaderboard());
